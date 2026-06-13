@@ -1,0 +1,5 @@
+# Vynúť CRLF pre PowerShell skripty (kompatibilita s PS 5.1 na Windows)
+*.ps1  text  eol=crlf
+
+# AHK skripty tiež udržuj s CRLF
+*.ahk  text  eol=crlf
