@@ -2,13 +2,15 @@
 <#
     Instalator AHK skriptov - bezi bez admin prav
     Postup: Git -> AutoHotkey -> klonovanie repo -> Startup skratky -> spustenie
+
+    BOOTSTRAP (cisty PC bez Gitu):
+    irm https://raw.githubusercontent.com/yardstudio/ahk-scripts/master/install.ps1 | iex
 #>
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # --- Pomocne funkcie na vypis ---
-
 function Write-Krok  { param([string]$T) Write-Host "`n==> $T" -ForegroundColor Cyan }
 function Write-OK    { param([string]$T) Write-Host "  [OK]    $T" -ForegroundColor Green }
 function Write-Info  { param([string]$T) Write-Host "  [INFO]  $T" -ForegroundColor Yellow }
@@ -27,10 +29,10 @@ Write-Krok 'Krok 1/6 - Git'
 function Find-Git {
     $cmd = Get-Command git -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-
     $kandidati = @(
         "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe",
-        "$env:APPDATA\Programs\Git\cmd\git.exe"
+        "$env:ProgramFiles\Git\cmd\git.exe",
+        "${env:ProgramFiles(x86)}\Git\cmd\git.exe"
     )
     foreach ($p in $kandidati) {
         if (Test-Path $p) { return $p }
@@ -43,7 +45,7 @@ $GitExe = Find-Git
 if ($GitExe) {
     Write-OK "Git najdeny: $GitExe ($(& $GitExe --version))"
 } else {
-    Write-Info 'Git nie je nainstalovany. Instalujem cez winget (user scope)...'
+    Write-Info 'Git nie je nainstalovany. Instalujem cez winget...'
 
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $winget) {
@@ -51,14 +53,15 @@ if ($GitExe) {
         exit 1
     }
 
-    winget install Git.Git --scope user --silent --accept-source-agreements --accept-package-agreements
+    winget install Git.Git --silent --accept-source-agreements --accept-package-agreements
 
+    # Refreshni PATH
     $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'User') + ';' +
                 [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
 
     $GitExe = Find-Git
     if (-not $GitExe) {
-        Write-Chyba 'Git sa nepodarilo nainstalovat. Skontroluj winget alebo nainštaluj manualne.'
+        Write-Chyba 'Git sa nepodarilo nainstalovat. Nainštaluj manualne: https://git-scm.com/download/win'
         exit 1
     }
     Write-OK "Git nainstalovany: $GitExe"
@@ -92,9 +95,9 @@ if ($AhkExe) {
     Write-OK "AutoHotkey 1.1.x najdeny: $AhkExe (v$ahkVer)"
 } else {
     Write-Info 'AutoHotkey 1.1.x nie je nainstalovany.'
+    Write-Info 'Zistujem najnovsiu verziu AutoHotkey 1.1.x...'
 
     $AhkDownloadBase = 'https://www.autohotkey.com/download/1.1/'
-    Write-Info 'Zistujem najnovsiu verziu AutoHotkey 1.1.x...'
     $strankaObsah = (Invoke-WebRequest -Uri $AhkDownloadBase -UseBasicParsing).Content
 
     $zhody = [regex]::Matches($strankaObsah, 'AutoHotkey_([\d.]+)_setup\.exe')
@@ -107,7 +110,7 @@ if ($AhkExe) {
         Sort-Object { [version]$_ } |
         Select-Object -Last 1
 
-    Write-Info "Najnovsie verzia: $najnovsiaVerzia"
+    Write-Info "Najnovsiu verzia: $najnovsiaVerzia"
 
     $AhkSetupUrl  = "${AhkDownloadBase}AutoHotkey_${najnovsiaVerzia}_setup.exe"
     $AhkZipUrl    = "${AhkDownloadBase}AutoHotkey_${najnovsiaVerzia}.zip"
@@ -117,7 +120,7 @@ if ($AhkExe) {
     Write-Info "Stahujem AutoHotkey instalator (v$najnovsiaVerzia)..."
     Invoke-WebRequest -Uri $AhkSetupUrl -OutFile $AhkSetupPath -UseBasicParsing
 
-    Write-Info 'Skusam tichu instaláciu do user profilu...'
+    Write-Info 'Spustam tichu instaláciu do user profilu...'
     $null = Start-Process -FilePath $AhkSetupPath `
                           -ArgumentList "/S /D=`"$AhkUserDir`"" `
                           -Wait -PassThru -ErrorAction SilentlyContinue
@@ -125,14 +128,11 @@ if ($AhkExe) {
     $AhkExe = Find-AHK
 
     if (-not $AhkExe) {
-        Write-Info 'Instalator neuspel (pravdepodobne vyzaduje admin). Stahujem portable ZIP...'
-
+        Write-Info 'Instalator neuspel. Stahujem portable ZIP...'
         $AhkZipPath = Join-Path $TempDir 'AutoHotkey_portable.zip'
         Invoke-WebRequest -Uri $AhkZipUrl -OutFile $AhkZipPath -UseBasicParsing
-
         New-Item -ItemType Directory -Path $AhkUserDir -Force | Out-Null
         Expand-Archive -Path $AhkZipPath -DestinationPath $AhkUserDir -Force
-
         $AhkExe = Find-AHK
     }
 
